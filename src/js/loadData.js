@@ -1,18 +1,8 @@
-function timeFormatter(timeValue) {
-	if (timeValue > 59) {
-		if (timeValue > 3600)
-			return (
-				Math.floor(timeValue / 3600) +
-				"h, " +
-				Math.floor((timeValue - 3600) / 60) +
-				"m"
-			);
-		return Math.floor(timeValue / 60) + "m";
-	}
-	return timeValue + "s";
-}
+import { Toast } from "bootstrap";
+import {timeFormatter} from "./helpers.js";
 
-function populatePopup(timeMapArray) {
+export function populateTable(timeMapArray) {
+	timeMapArray.sort((a, b) => b.time - a.time);
 	const tableData = timeMapArray
 		.map(function (value) {
 			return `
@@ -28,9 +18,14 @@ function populatePopup(timeMapArray) {
 	tableBody.innerHTML = tableData;
 }
 
-export function loadData(result) {
-
-	result.sort((a, b) => b.time - a.time);
-	populatePopup(result);
-	
+export function populateTotalTime(timeVal){
+	const totalTimeHeader = document.querySelector(".totalTime");
+	totalTimeHeader.innerHTML = "Total Time Browsed: " + timeFormatter(timeVal);
 }
+
+// export function loadTableData(result) {
+
+	
+// 	populatePopup(result);
+	
+// }
