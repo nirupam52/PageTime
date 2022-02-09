@@ -1,0 +1,34 @@
+{
+    "manifest_version": 2,
+    "name": "PageTime",
+    "version": "1.0",
+  
+    "description": "Monitor time spent on webpages",
+  
+    "icons": {
+      
+    },
+
+    "background":{
+      "scripts": ["browsingDataStore.js"]
+    },
+  
+    "content_scripts": [
+      {
+        "matches": ["<all_urls>"]
+        
+      }
+    ],
+
+    "browser_action": {
+        "default_title": "PageTime",
+        "default_popup": "/popup.html"
+    },
+
+    "permissions": [
+        "storage", "webNavigation"
+    ]
+
+    
+  
+  }
