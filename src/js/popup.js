@@ -26,3 +26,10 @@ resetbutton.addEventListener('click', function(){
         populateTotalTime(0);
     });
 });
+
+let moreInfoButton = document.getElementById("moreInfo");
+moreInfoButton.addEventListener('click',function(){
+    browser.tabs.create({
+        url: browser.runtime.getURL('./info.html')
+    });
+});

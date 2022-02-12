@@ -47,7 +47,7 @@ module.exports = {
 			filename: "popup.html",
 		}),
 		new CopyPlugin({
-			patterns: [{ from: "public" }, { from: "src/js/browsingDataStore.js" }],
+			patterns: [{ from: "public" }, { from: "src/js/browsingDataStore.js" }, {from: "src/info.html"}],
 		}),
 	],
 };

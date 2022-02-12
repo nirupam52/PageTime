@@ -23,9 +23,4 @@ export function populateTotalTime(timeVal){
 	totalTimeHeader.innerHTML = "Total Time Browsed: " + timeFormatter(timeVal);
 }
 
-// export function loadTableData(result) {
 
-	
-// 	populatePopup(result);
-	
-// }
