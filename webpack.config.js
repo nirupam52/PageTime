@@ -3,11 +3,13 @@ const CopyPlugin = require("copy-webpack-plugin");
 const path = require("path");
 
 module.exports = {
+	devtool: "inline-source-map",
 	entry: "./src/js/popup.js",
 	output: {
 		path: path.resolve(__dirname, "dist"),
 		filename: "bundle.js",
 	},
+	mode: "development",
 	module: {
 		rules: [
 			{

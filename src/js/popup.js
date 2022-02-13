@@ -1,4 +1,3 @@
-import { Toast } from "bootstrap";
 import "../../node_modules/bootstrap/dist/js/bootstrap.bundle.min.js";
 import "../scss/style.scss";
 

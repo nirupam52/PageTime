@@ -1,4 +1,3 @@
-import { Toast } from "bootstrap";
 import {timeFormatter} from "./helpers.js";
 
 export function populateTable(timeMapArray) {
