@@ -1,4 +1,3 @@
-import { Toast } from "bootstrap";
 import {timeFormatter} from "./helpers.js";
 
 export function populateTable(timeMapArray) {
@@ -23,9 +22,4 @@ export function populateTotalTime(timeVal){
 	totalTimeHeader.innerHTML = "Total Time Browsed: " + timeFormatter(timeVal);
 }
 
-// export function loadTableData(result) {
 
-	
-// 	populatePopup(result);
-	
-// }
