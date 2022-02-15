@@ -3,8 +3,11 @@ const CopyPlugin = require("copy-webpack-plugin");
 const path = require("path");
 
 module.exports = {
+	experiments: {
+		topLevelAwait: true
+	},
 	devtool: "inline-source-map",
-	entry: "./src/js/popup.js",
+	entry: ["@babel/polyfill", "./src/js/popup.js"],
 	output: {
 		path: path.resolve(__dirname, "dist"),
 		filename: "bundle.js",
@@ -12,6 +15,17 @@ module.exports = {
 	mode: "development",
 	module: {
 		rules: [
+			{
+				test: /\.m?js$/,
+				exclude: /(node_modules|bower_components)/,
+				use: {
+					loader: 'babel-loader',
+					options: {
+						presets: ['@babel/preset-env'],
+						plugins: []
+					}
+				}
+			},
 			{
 				test: /\.(scss)$/,
 				use: [
