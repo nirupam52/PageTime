@@ -11,9 +11,18 @@ export function plotChart(dat) {
 				data: dat,
 				parsing: {
 					key: 'time',
-				}
+				},
+				backgroundColor: [
+					'rgb(255, 99, 132)',
+					'rgb(54, 162, 235)',
+					'rgb(255, 205, 86)',
+					'rgb(255, 150, 100)',
+					'rgb(120, 40, 200)',
+					'rgb(60, 90, 170)'
+				  ],
 			}]
 		},
+		
 		
 	});
 }
