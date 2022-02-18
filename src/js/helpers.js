@@ -1,10 +1,11 @@
 export function timeFormatter(timeValue) {
+	if(!Number.isInteger(timeValue)) throw new Error('Invalid input to timeFormatter');
 	if (timeValue > 59) {
 		if (timeValue > 3600)
 			return (
 				Math.floor(timeValue / 3600) +
 				"h, " +
-				Math.floor((timeValue - 3600) / 60) +
+				Math.floor((timeValue - (Math.floor(timeValue / 3600)*3600)) / 60) +
 				"m"
 			);
 		return Math.floor(timeValue / 60) + "m";
