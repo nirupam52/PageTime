@@ -1,7 +1,6 @@
 import {timeFormatter} from "./helpers.js";
 
 export function populateTable(timeMapArray) {
-	timeMapArray.sort((a, b) => b.time - a.time);
 	const tableData = timeMapArray
 		.map(function (value) {
 			return `

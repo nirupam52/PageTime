@@ -4,8 +4,27 @@
   "description": "Monitor usage of webpages",
   "main": "browsingDataStore.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
     "build": "webpack --config webpack.config.js"
+  },
+  "jest": {
+    "verbose": true,
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "jsx",
+      "ts",
+      "tsx",
+      "node",
+      "vue"
+    ],
+    "transform": {
+      ".+\\.(css|styl|less|sass|scss|png|jpg|ttf|woff|woff2)$": "jest-transform-stub",
+      "^.+\\.js$": "babel-jest"
+    },
+    "setupFiles": [
+      "jest-webextension-mock"
+    ]
   },
   "author": "",
   "license": "ISC",
@@ -19,11 +38,15 @@
     "@babel/core": "^7.17.2",
     "@babel/preset-env": "^7.16.11",
     "autoprefixer": "^10.4.2",
+    "babel-core": "^7.0.0-bridge.0",
     "babel-loader": "^8.2.3",
     "copy-webpack-plugin": "^10.2.1",
     "css-loader": "^6.5.1",
     "exports-loader": "^3.1.0",
     "html-webpack-plugin": "^5.5.0",
+    "jest": "^27.5.1",
+    "jest-transform-stub": "^2.0.0",
+    "jest-webextension-mock": "^3.7.19",
     "node-sass": "^7.0.1",
     "postcss-loader": "^6.2.1",
     "sass-loader": "^12.4.0",

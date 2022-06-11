@@ -1,5 +1,6 @@
 import "../../node_modules/bootstrap/dist/js/bootstrap.bundle.min.js";
 import "../scss/style.scss";
+import { getTopFive } from "./helpers.js";
 
 import { populateTable, populateTotalTime } from "./loadData.js";
 import { plotChart } from "./visualizeData.js";
@@ -12,9 +13,10 @@ browser.storage.local.get().then(function (result) {
         pageData.push({ site: key, time: result[key] });
         totalTime += result[key];
     }
-    populateTable(pageData);
+    let topFiveSites = getTopFive(pageData);
+    populateTable(topFiveSites);
     populateTotalTime(totalTime);
-    plotChart(pageData);
+    plotChart(topFiveSites);
 });
 
 let resetbutton = document.getElementById("reset");
