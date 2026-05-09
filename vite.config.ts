@@ -47,7 +47,7 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: `dist/${browser}`,
       emptyOutDir: true,
-      sourcemap: true
+      sourcemap: 'inline'
     }
   }
 })
