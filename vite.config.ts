@@ -8,8 +8,7 @@ function generateManifest(browser: string) {
     name: 'PageTime',
     version: '2.0.0',
     description: 'Track time spent across websites',
-    permissions: ['storage', 'tabs', 'idle'],
-    host_permissions: ['<all_urls>'],
+    permissions: ['storage', 'tabs', 'idle', 'alarms'],
     action: {
       default_popup: 'src/popup/index.html',
       default_title: 'PageTime'
@@ -22,7 +21,7 @@ function generateManifest(browser: string) {
       // Firefox MV3 uses scripts (background page) rather than service_worker
       background: { scripts: ['src/background/index.ts'] },
       browser_specific_settings: {
-        gecko: { id: 'pagetime@pagetime.dev', strict_min_version: '109.0' }
+        gecko: { id: 'pagetime@pagetime.dev', strict_min_version: '115.0' }
       }
     }
   }
@@ -47,7 +46,7 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: `dist/${browser}`,
       emptyOutDir: true,
-      sourcemap: 'inline'
+      sourcemap: false
     }
   }
 })

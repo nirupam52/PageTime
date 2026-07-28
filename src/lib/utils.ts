@@ -1,4 +1,4 @@
-import type { SiteEntry } from './types'
+import type { BrowsingData, SiteEntry, TimeFilter } from './types'
 
 export function formatTime(seconds: number): string {
   if (seconds < 60) return `${seconds}s`
@@ -25,5 +25,59 @@ export function getTopSites(
 }
 
 export function todayKey(): string {
-  return new Date().toISOString().slice(0, 10)
+  return dateKey(new Date())
+}
+
+export function dateKey(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+export function filterBrowsingData(
+  data: BrowsingData,
+  filter: TimeFilter,
+  now = new Date()
+): Record<string, number> {
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const earliest = filter === 'week'
+    ? dateKey(new Date(start.getFullYear(), start.getMonth(), start.getDate() - 6))
+    : dateKey(start)
+
+  return Object.entries(data).reduce<Record<string, number>>((sites, [date, record]) => {
+    if (filter !== 'all' && date < earliest) return sites
+    for (const [hostname, seconds] of Object.entries(record)) {
+      sites[hostname] = (sites[hostname] ?? 0) + seconds
+    }
+    return sites
+  }, {})
+}
+
+export function totalSeconds(data: Record<string, number>): number {
+  return Object.values(data).reduce((total, seconds) => total + seconds, 0)
+}
+
+function csvCell(value: string | number): string {
+  return `"${String(value).replaceAll('"', '""')}"`
+}
+
+export function browsingDataToCsv(data: BrowsingData): string {
+  const rows = ['date,site,seconds']
+  for (const date of Object.keys(data).sort()) {
+    for (const [hostname, seconds] of Object.entries(data[date]).sort(([a], [b]) => a.localeCompare(b))) {
+      rows.push([date, hostname, seconds].map(csvCell).join(','))
+    }
+  }
+  return rows.join('\r\n')
+}
+
+export function extractHostname(url: string | undefined): string | null {
+  if (!url) return null
+  try {
+    const { protocol, hostname } = new URL(url)
+    return protocol === 'http:' || protocol === 'https:' ? hostname : null
+  } catch {
+    return null
+  }
 }

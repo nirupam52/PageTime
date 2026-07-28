@@ -1,2 +1,3 @@
-// Phase 2: tracking engine
-export {}
+import { initTracker } from '../lib/tracker'
+
+initTracker()

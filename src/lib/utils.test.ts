@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { formatTime, getTopSites, todayKey } from './utils'
+import {
+  browsingDataToCsv,
+  dateKey,
+  extractHostname,
+  filterBrowsingData,
+  formatTime,
+  getTopSites,
+  todayKey,
+  totalSeconds
+} from './utils'
 
 describe('formatTime', () => {
   it('formats seconds under a minute', () => {
@@ -56,5 +65,81 @@ describe('getTopSites', () => {
 describe('todayKey', () => {
   it('returns a YYYY-MM-DD formatted string', () => {
     expect(todayKey()).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+})
+
+describe('dateKey', () => {
+  it('uses the local calendar date', () => {
+    expect(dateKey(new Date(2026, 6, 28, 23, 59))).toBe('2026-07-28')
+  })
+})
+
+describe('filterBrowsingData', () => {
+  const data = {
+    '2026-07-21': { 'old.example': 10 },
+    '2026-07-22': { 'week.example': 20 },
+    '2026-07-28': { 'today.example': 30, 'week.example': 40 }
+  }
+  const now = new Date(2026, 6, 28, 12)
+
+  it('returns only today for the today view', () => {
+    expect(filterBrowsingData(data, 'today', now)).toEqual({
+      'today.example': 30,
+      'week.example': 40
+    })
+  })
+
+  it('uses a rolling seven-day window for the week view', () => {
+    expect(filterBrowsingData(data, 'week', now)).toEqual({
+      'week.example': 60,
+      'today.example': 30
+    })
+  })
+
+  it('returns every stored day for the all-time view', () => {
+    const sites = filterBrowsingData(data, 'all', now)
+    expect(totalSeconds(sites)).toBe(100)
+  })
+})
+
+describe('browsingDataToCsv', () => {
+  it('sorts rows and escapes quoted site names', () => {
+    expect(browsingDataToCsv({
+      '2026-07-28': { 'z.example': 2, 'a"site.example': 1 }
+    })).toBe('date,site,seconds\r\n"2026-07-28","a""site.example","1"\r\n"2026-07-28","z.example","2"')
+  })
+})
+
+describe('extractHostname', () => {
+  it('extracts hostname from http URLs', () => {
+    expect(extractHostname('http://github.com/some/path')).toBe('github.com')
+  })
+
+  it('extracts hostname from https URLs', () => {
+    expect(extractHostname('https://www.youtube.com/watch?v=123')).toBe('www.youtube.com')
+  })
+
+  it('returns null for chrome internal pages', () => {
+    expect(extractHostname('chrome://extensions')).toBeNull()
+    expect(extractHostname('chrome://newtab/')).toBeNull()
+  })
+
+  it('returns null for about pages', () => {
+    expect(extractHostname('about:blank')).toBeNull()
+    expect(extractHostname('about:newtab')).toBeNull()
+  })
+
+  it('returns null for extension pages', () => {
+    expect(extractHostname('moz-extension://abc123/popup.html')).toBeNull()
+    expect(extractHostname('chrome-extension://abc123/popup.html')).toBeNull()
+  })
+
+  it('returns null for undefined or empty input', () => {
+    expect(extractHostname(undefined)).toBeNull()
+    expect(extractHostname('')).toBeNull()
+  })
+
+  it('returns null for malformed URLs', () => {
+    expect(extractHostname('not a url')).toBeNull()
   })
 })

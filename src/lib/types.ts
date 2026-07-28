@@ -8,3 +8,9 @@ export interface SiteEntry {
   hostname: string
   seconds: number
 }
+
+export interface TrackerState {
+  hostname: string | null
+  startTime: number | null
+  isTracking: boolean
+}
