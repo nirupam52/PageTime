@@ -68,9 +68,14 @@ async function isFocusedTab(tab: browser.Tabs.Tab): Promise<boolean> {
 
 export async function initTracker(): Promise<void> {
   state = await loadTrackerState()
-  state.hostname = state.isTracking ? await getActiveHostname() : null
-  state.startTime = state.hostname ? Date.now() : null
-  await saveTrackerState(state)
+  const hostname = state.isTracking ? await getActiveHostname() : null
+  if (hostname === state.hostname && state.startTime !== null) {
+    await flush()
+  } else {
+    state.hostname = hostname
+    state.startTime = hostname ? Date.now() : null
+    await saveTrackerState(state)
+  }
 
   browser.tabs.onActivated.addListener(async ({ tabId }) => {
     try {

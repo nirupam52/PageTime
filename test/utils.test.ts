@@ -8,7 +8,7 @@ import {
   getTopSites,
   todayKey,
   totalSeconds
-} from './utils'
+} from '../src/lib/utils'
 
 describe('formatTime', () => {
   it('formats seconds under a minute', () => {
@@ -96,6 +96,12 @@ describe('filterBrowsingData', () => {
     })
   })
 
+  it('groups www hosts with their root host', () => {
+    expect(filterBrowsingData({
+      '2026-07-28': { 'youtube.com': 30, 'www.youtube.com': 40 }
+    }, 'all', now)).toEqual({ 'youtube.com': 70 })
+  })
+
   it('returns every stored day for the all-time view', () => {
     const sites = filterBrowsingData(data, 'all', now)
     expect(totalSeconds(sites)).toBe(100)
@@ -116,7 +122,7 @@ describe('extractHostname', () => {
   })
 
   it('extracts hostname from https URLs', () => {
-    expect(extractHostname('https://www.youtube.com/watch?v=123')).toBe('www.youtube.com')
+    expect(extractHostname('https://www.youtube.com/watch?v=123')).toBe('youtube.com')
   })
 
   it('returns null for chrome internal pages', () => {
