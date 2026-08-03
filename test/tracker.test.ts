@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { todayKey } from './utils'
+import { todayKey } from '../src/lib/utils'
 
 const mock = vi.hoisted(() => {
   const state = {
@@ -43,7 +43,7 @@ describe('initTracker', () => {
 
   it('flushes elapsed time restored after a service-worker restart', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(6_000)
-    const { initTracker } = await import('./tracker')
+    const { initTracker } = await import('../src/lib/tracker')
 
     await initTracker()
 

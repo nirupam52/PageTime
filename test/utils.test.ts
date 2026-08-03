@@ -8,7 +8,7 @@ import {
   getTopSites,
   todayKey,
   totalSeconds
-} from './utils'
+} from '../src/lib/utils'
 
 describe('formatTime', () => {
   it('formats seconds under a minute', () => {
