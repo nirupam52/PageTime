@@ -47,7 +47,8 @@ export function filterBrowsingData(
 
   return Object.entries(data).reduce<Record<string, number>>((sites, [date, record]) => {
     if (filter !== 'all' && date < earliest) return sites
-    for (const [hostname, seconds] of Object.entries(record)) {
+    for (const [rawHostname, seconds] of Object.entries(record)) {
+      const hostname = normalizeHostname(rawHostname)
       sites[hostname] = (sites[hostname] ?? 0) + seconds
     }
     return sites
@@ -65,7 +66,8 @@ function csvCell(value: string | number): string {
 export function browsingDataToCsv(data: BrowsingData): string {
   const rows = ['date,site,seconds']
   for (const date of Object.keys(data).sort()) {
-    for (const [hostname, seconds] of Object.entries(data[date]).sort(([a], [b]) => a.localeCompare(b))) {
+    const sites = filterBrowsingData({ [date]: data[date] }, 'all')
+    for (const [hostname, seconds] of Object.entries(sites).sort(([a], [b]) => a.localeCompare(b))) {
       rows.push([date, hostname, seconds].map(csvCell).join(','))
     }
   }
@@ -76,8 +78,12 @@ export function extractHostname(url: string | undefined): string | null {
   if (!url) return null
   try {
     const { protocol, hostname } = new URL(url)
-    return protocol === 'http:' || protocol === 'https:' ? hostname : null
+    return protocol === 'http:' || protocol === 'https:' ? normalizeHostname(hostname) : null
   } catch {
     return null
   }
+}
+
+export function normalizeHostname(hostname: string): string {
+  return hostname.startsWith('www.') ? hostname.slice(4) : hostname
 }
