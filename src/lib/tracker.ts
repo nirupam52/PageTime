@@ -116,7 +116,7 @@ browser.windows.onFocusChanged.addListener((windowId) => {
     : async () => resume(await getFocusedHostname(windowId)))
 })
 
-browser.alarms.create(ALARM_NAME, { periodInMinutes: 1 })
+void browser.alarms.create(ALARM_NAME, { periodInMinutes: 1 })
 browser.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_NAME) void queue(flush)
 })

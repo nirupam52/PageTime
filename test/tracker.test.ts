@@ -15,20 +15,20 @@ const mock = vi.hoisted(() => {
     runtime: { onMessage: event() },
     storage: {
       local: {
-        get: vi.fn(async (key: string): Promise<Record<string, unknown>> => ({ [key]: state.local[key] })),
-        remove: vi.fn(async (key: string): Promise<void> => { delete state.local[key] }),
-        set: vi.fn(async (values: Record<string, unknown>): Promise<void> => { Object.assign(state.local, values) })
+        get: vi.fn((key: string): Promise<Record<string, unknown>> => Promise.resolve({ [key]: state.local[key] })),
+        remove: vi.fn((key: string): Promise<void> => { delete state.local[key]; return Promise.resolve() }),
+        set: vi.fn((values: Record<string, unknown>): Promise<void> => { Object.assign(state.local, values); return Promise.resolve() })
       },
       session: {
-        get: vi.fn(async (key: string): Promise<Record<string, unknown>> => ({ [key]: state.session[key] })),
-        set: vi.fn(async (values: Record<string, unknown>): Promise<void> => { Object.assign(state.session, values) })
+        get: vi.fn((key: string): Promise<Record<string, unknown>> => Promise.resolve({ [key]: state.session[key] })),
+        set: vi.fn((values: Record<string, unknown>): Promise<void> => { Object.assign(state.session, values); return Promise.resolve() })
       }
     },
-    tabs: { get: vi.fn(), onActivated: event(), onUpdated: event(), query: vi.fn(async () => state.tabs) },
+    tabs: { get: vi.fn(), onActivated: event(), onUpdated: event(), query: vi.fn(() => Promise.resolve(state.tabs)) },
     windows: {
       WINDOW_ID_NONE: -1,
-      get: vi.fn(async (id: number) => state.windows.get(id)),
-      getLastFocused: vi.fn(async () => ({ id: 1, ...state.windows.get(1) })),
+      get: vi.fn((id: number) => Promise.resolve(state.windows.get(id))),
+      getLastFocused: vi.fn(() => Promise.resolve({ id: 1, ...state.windows.get(1) })),
       onFocusChanged: event()
     }
   }

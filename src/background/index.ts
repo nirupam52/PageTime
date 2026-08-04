@@ -1,3 +1,3 @@
 import { initTracker } from '../lib/tracker'
 
-initTracker()
+void initTracker()
