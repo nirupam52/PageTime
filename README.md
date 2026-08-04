@@ -18,6 +18,7 @@ Browse a site for a minute, then open PageTime from the toolbar. Use Refresh to 
 ## Checks
 
 ```sh
+npm run lint
 npm test
 npm run typecheck
 npm run build:all
