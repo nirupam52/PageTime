@@ -6,7 +6,7 @@ Accepted
 
 ## Decision
 
-PageTime records time only for a non-incognito HTTP(S) tab in the focused browser window. Browser idle or locked events pause tracking; the current browser setting reports idle after 60 seconds.
+PageTime records time only for a non-incognito HTTP(S) tab in the focused browser window. It continues counting passive reading and video playback; only losing browser-window focus pauses tracking.
 
 A site is its hostname with one leading `www.` removed. Subdomains otherwise remain distinct.
 
