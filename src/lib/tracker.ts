@@ -7,9 +7,13 @@ const ALARM_NAME = 'pagetime-flush'
 
 let state: TrackerState = { hostname: null, startTime: null, isTracking: true }
 let pending = Promise.resolve()
+let initialization: Promise<void> | null = null
 
 function queue<T>(operation: () => Promise<T>): Promise<T> {
-  const next = pending.then(operation, operation)
+  const next = pending.then(async () => {
+    await initTracker()
+    return operation()
+  })
   pending = next.then(() => undefined, () => undefined)
   return next
 }
@@ -50,9 +54,13 @@ async function reset(): Promise<void> {
   await saveTrackerState(state)
 }
 
-async function getActiveHostname(): Promise<string | null> {
+async function getFocusedHostname(windowId?: number): Promise<string | null> {
   try {
-    const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
+    const window = windowId === undefined
+      ? await browser.windows.getLastFocused()
+      : await browser.windows.get(windowId)
+    if (!window.focused || window.id === undefined) return null
+    const [tab] = await browser.tabs.query({ active: true, windowId: window.id })
     if (!tab || tab.incognito) return null
     return extractHostname(tab.url)
   } catch {
@@ -67,55 +75,54 @@ async function isFocusedTab(tab: browser.Tabs.Tab): Promise<boolean> {
 }
 
 export async function initTracker(): Promise<void> {
+  initialization ??= initializeTracker()
+  return initialization
+}
+
+async function initializeTracker(): Promise<void> {
   state = await loadTrackerState()
-  const hostname = state.isTracking ? await getActiveHostname() : null
-  if (hostname === state.hostname && state.startTime !== null) {
+  const hostname = await getFocusedHostname()
+  if (state.isTracking && hostname === state.hostname && state.startTime !== null) {
     await flush()
   } else {
+    state.isTracking = hostname !== null
     state.hostname = hostname
     state.startTime = hostname ? Date.now() : null
     await saveTrackerState(state)
   }
+}
 
-  browser.tabs.onActivated.addListener(async ({ tabId }) => {
+browser.tabs.onActivated.addListener(({ tabId }) => {
+  void queue(async () => {
     try {
       const tab = await browser.tabs.get(tabId)
-      if (await isFocusedTab(tab)) await queue(() => setActiveHostname(extractHostname(tab.url)))
+      if (await isFocusedTab(tab)) await setActiveHostname(extractHostname(tab.url))
     } catch { /* tab or window closed before we could read it */ }
   })
+})
 
-  browser.tabs.onUpdated.addListener(async (_tabId, changeInfo, tab) => {
-    if (!changeInfo.url) return
+browser.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+  if (!changeInfo.url) return
+  void queue(async () => {
     try {
-      if (await isFocusedTab(tab)) await queue(() => setActiveHostname(extractHostname(changeInfo.url)))
+      if (await isFocusedTab(tab)) await setActiveHostname(extractHostname(changeInfo.url))
     } catch { /* tab or window closed before we could read it */ }
   })
+})
 
-  browser.windows.onFocusChanged.addListener(async (windowId) => {
-    if (windowId === browser.windows.WINDOW_ID_NONE) {
-      await queue(pause)
-    } else {
-      await queue(async () => resume(await getActiveHostname()))
-    }
-  })
+browser.windows.onFocusChanged.addListener((windowId) => {
+  void queue(windowId === browser.windows.WINDOW_ID_NONE
+    ? pause
+    : async () => resume(await getFocusedHostname(windowId)))
+})
 
-  browser.idle.setDetectionInterval(60)
-  browser.idle.onStateChanged.addListener(async (idleState) => {
-    if (idleState === 'idle' || idleState === 'locked') {
-      await queue(pause)
-    } else if (idleState === 'active') {
-      await queue(async () => resume(await getActiveHostname()))
-    }
-  })
+browser.alarms.create(ALARM_NAME, { periodInMinutes: 1 })
+browser.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === ALARM_NAME) void queue(flush)
+})
 
-  browser.alarms.create(ALARM_NAME, { periodInMinutes: 1 })
-  browser.alarms.onAlarm.addListener(async (alarm) => {
-    if (alarm.name === ALARM_NAME) await queue(flush)
-  })
-
-  browser.runtime.onMessage.addListener((message: unknown) => {
-    if (!message || typeof message !== 'object' || !('type' in message)) return
-    if (message.type === 'flush') return queue(flush)
-    if (message.type === 'reset') return queue(reset)
-  })
-}
+browser.runtime.onMessage.addListener((message: unknown) => {
+  if (!message || typeof message !== 'object' || !('type' in message)) return
+  if (message.type === 'flush') return queue(flush)
+  if (message.type === 'reset') return queue(reset)
+})
