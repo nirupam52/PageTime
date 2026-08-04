@@ -8,7 +8,7 @@ function generateManifest(browser: string) {
     name: 'PageTime',
     version: '2.0.0',
     description: 'Track time spent across websites',
-    permissions: ['storage', 'tabs', 'idle', 'alarms'],
+    permissions: ['storage', 'tabs', 'alarms'],
     action: {
       default_popup: 'src/popup/index.html',
       default_title: 'PageTime'

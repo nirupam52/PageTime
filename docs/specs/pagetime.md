@@ -12,8 +12,8 @@ PageTime is a Chrome and Firefox browser extension that records foreground time 
 
 1. As a browser user, I want PageTime to record time only for the tab I am actively viewing, so that background tabs do not inflate my totals.
 2. As a browser user, I want tracking to stop when my browser window loses focus, so that time away from the browser is excluded.
-3. As a browser user, I want tracking to stop when my browser reports that I am idle or locked, so that inactive time is excluded.
-4. As a browser user, I want tracking to resume when I return to active browsing, so that genuine foreground time continues to accumulate.
+3. As a browser user, I want passive reading and video playback to count, so that time on a focused site is not lost merely because I stop interacting.
+4. As a browser user, I want tracking to resume when I return to a focused browser window, so that genuine foreground time continues to accumulate.
 5. As a privacy-conscious user, I want all browsing data to stay in my browser, so that no account, sync service, or external data transfer is involved.
 6. As a user, I want internal browser pages and extension pages ignored, so that only websites appear in my statistics.
 7. As a user, I want incognito browsing ignored, so that private browsing remains untracked.
@@ -40,20 +40,101 @@ PageTime is a Chrome and Firefox browser extension that records foreground time 
 - Browsing data is local-only and uses a calendar-date-to-site-to-seconds mapping. It is intentionally not stored in sync storage and is never sent over the network.
 - Tracker state is session-only: active Site, interval start time, and whether tracking is active. It is separate from persistent Browsing data.
 - A Site is an HTTP(S) hostname with one leading `www.` removed. No public-suffix or broader registrable-domain grouping is applied; other subdomains remain distinct.
-- Foreground time requires an active, non-incognito tab in a focused browser window. Idle and locked events pause tracking; the browser idle threshold is 60 seconds.
-- Tab activation, navigations, window focus changes, idle-state changes, and periodic alarms drive interval flushing.
+- Foreground time requires an active, non-incognito tab in a focused browser window. Passive time on that tab counts; browser-window focus loss pauses tracking.
+- Tab activation, navigations, window focus changes, and periodic alarms drive interval flushing.
+- Chrome registers those event listeners synchronously when its Manifest V3 service worker starts; asynchronous state restoration happens within the handlers so startup events are not missed.
 - On background initialization, a saved interval is flushed only when its saved Site equals the current active Site. A mismatch starts a new interval to avoid assigning unknown elapsed time to the wrong Site.
 - The popup requests a flush before reading Browsing data. It aggregates date records for Today, a rolling seven-day window, or all time; it displays the five largest Sites plus an Others aggregate when needed.
 - CSV exports the complete stored date history with stable date and site ordering, escaped cells, and normalized Site grouping.
 - Reset removes persistent Browsing data after user confirmation while keeping the tracker ready to continue the currently valid interval.
 - Chrome uses a Manifest V3 service worker; Firefox uses its compatible background-script configuration. Both builds share the same tracking and popup behavior.
 
+## Current Tracking Model
+
+### Tracking flow
+
+```mermaid
+flowchart TD
+  boot[Background starts] --> listeners[Register tab, window, alarm, and popup listeners synchronously]
+  listeners --> init[Load session tracker state]
+  init --> focused{Focused window has an active eligible web tab?}
+  focused -- no --> paused[No active interval]
+  focused -- yes --> restored{Saved state is tracking the same hostname?}
+  restored -- yes --> recover[Flush recovered elapsed time]
+  restored -- no --> start[Start interval at now]
+  recover --> tracking[Tracking: hostname + start time]
+  start --> tracking
+
+  tab[Active-tab or hostname change] --> tabEligible{Eligible tab in focused window?}
+  tabEligible -- yes --> switch[Flush prior site; start new site]
+  tabEligible -- no --> clear[Flush prior site; clear hostname]
+  switch --> tracking
+  clear --> paused
+
+  blur[Browser loses focus] --> stop[Flush current site; pause]
+  focus[Browser window gains focus] --> focusEligible{Focused active tab eligible?}
+  focusEligible -- yes --> resume[Start interval at now]
+  focusEligible -- no --> paused
+  resume --> tracking
+  stop --> paused
+
+  tick[One-minute alarm or popup refresh] --> flush[Flush elapsed whole seconds]
+  tracking --> flush
+  flush --> data[(Local data: date → site → seconds)]
+  flush --> tracking
+```
+
+### What counts
+
+PageTime counts wall-clock time for one **Site** when all of these are true:
+
+1. The tab is active in its window.
+2. That browser window is focused.
+3. The tab is not incognito.
+4. Its URL is HTTP or HTTPS.
+
+The Site is the URL hostname with one leading `www.` removed. Paths, query strings, and fragments do not create separate records. Other subdomains remain separate. Time continues to count without keyboard or mouse activity, so passive reading and video playback count.
+
+### Tracker states
+
+| State | Stored hostname | Start time | Meaning |
+| --- | --- | --- | --- |
+| Tracking | Eligible hostname | Timestamp | Time accrues for that hostname. |
+| No eligible Site | `null` | `null` | The focused tab is internal, an extension page, incognito, or otherwise not HTTP(S); nothing accrues. |
+| Paused/not initialized | `null` | `null` | Nothing accrues. Browser-focus loss causes this state; startup on a noneligible page currently does too. |
+
+The session-only tracker state is saved after every transition. The durable browsing data is a separate local-storage map of date, Site, and whole seconds.
+
+### Start, stop, and flush events
+
+| Event | Result |
+| --- | --- |
+| Background startup | Finds the focused window's active tab. If it matches a saved tracked Site, credits elapsed time; otherwise starts a new interval only when the tab is eligible. |
+| Active-tab change | Flushes the old Site, then starts the eligible new Site. An internal or extension page leaves the tracker without a hostname. |
+| URL hostname change in the active focused tab | Flushes the old Site, then starts the new eligible Site. A same-host navigation changes nothing. |
+| Browser loses window focus | Flushes the current Site and pauses. |
+| Browser window gains focus | Starts a new interval for that window's active eligible tab. |
+| One-minute alarm | Flushes the active interval and immediately continues it. |
+| Popup refresh | Flushes the active interval before the popup reads data. |
+| Reset | Deletes browsing data and restarts the current eligible interval from zero. |
+
+Chrome registers these listeners before asynchronous state loading, so a Manifest V3 service-worker wake-up event is not lost. Event work is serialized so rapid tab and window changes cannot update state out of order.
+
+### Current accuracy boundaries
+
+- This is foreground-tab tracking, not attention tracking. A focused tab counts while its page is visible behind a browser UI surface such as a docked DevTools panel.
+- The clock is measured when the interval is flushed, rather than continuously. A crash or browser termination before the next event/alarm can lose up to roughly one minute of the current interval.
+- Seconds are stored as whole numbers. Each flush drops its sub-second remainder.
+- `addSeconds` assigns an entire flushed interval to the calendar date at flush time. An interval spanning local midnight is therefore not split between dates.
+- Browser restart clears session tracker state, so closed-browser time never counts. A service-worker restart retains it only when the saved hostname still matches the active focused tab.
+- Current defect: if startup finds no eligible Site, it stores a paused state. A later navigation from that page to an eligible Site records the hostname but does not start its clock until a browser-window focus change. That first visit is undercounted.
+
 ## Testing Decisions
 
 - Tests verify observable behavior rather than private implementation detail: accumulated seconds, normalized dashboard/export data, filtering, formatting, and URL eligibility.
 - The existing utility seam covers date keys, filtering, aggregation, CSV generation, time formatting, and hostname extraction/normalization.
 - The public tracker initialization seam is tested with browser-storage and active-tab doubles. It proves that a matching saved active interval is credited after a service-worker restart and would fail under the prior undercounting behavior.
-- Build and type-check remain release gates for both browser targets. Manual smoke testing should load each generated extension, browse a web page, switch tabs/windows, wait through an idle transition, refresh the popup, export CSV, and reset data.
+- Build and type-check remain release gates for both browser targets. Manual smoke testing should load each generated extension, browse a web page, switch tabs/windows and away from the browser, refresh the popup, export CSV, and reset data.
 
 ## Out of Scope
 
