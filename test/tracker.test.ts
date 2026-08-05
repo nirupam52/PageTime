@@ -81,6 +81,24 @@ describe('initTracker', () => {
     expect(mock.state.session.trackerState).toMatchObject({ hostname: null, startTime: null })
   })
 
+  it('starts tracking after an eligible navigation from an ineligible startup page', async () => {
+    mock.state.tabs = [{ active: true, url: 'chrome://newtab', windowId: 1 }]
+    vi.spyOn(Date, 'now').mockReturnValue(6_000)
+    const { initTracker } = await import('../src/lib/tracker')
+
+    await initTracker()
+    const onUpdated = mock.browser.tabs.onUpdated.addListener.mock.calls[0][0]
+    onUpdated(1, { url: 'https://example.com' }, { active: true, url: 'https://example.com', windowId: 1 })
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(mock.state.session.trackerState).toMatchObject({
+      hostname: 'example.com',
+      startTime: 6_000,
+      isTracking: true
+    })
+    vi.restoreAllMocks()
+  })
+
   it('does not install an idle timeout', async () => {
     const { initTracker } = await import('../src/lib/tracker')
 

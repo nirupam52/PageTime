@@ -85,7 +85,7 @@ async function initializeTracker(): Promise<void> {
   if (state.isTracking && hostname === state.hostname && state.startTime !== null) {
     await flush()
   } else {
-    state.isTracking = hostname !== null
+    state.isTracking = true
     state.hostname = hostname
     state.startTime = hostname ? Date.now() : null
     await saveTrackerState(state)
