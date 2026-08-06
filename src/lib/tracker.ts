@@ -79,6 +79,18 @@ export async function initTracker(): Promise<void> {
   return initialization
 }
 
+export function reconcileFocusedTab(): Promise<boolean> {
+  return queue(async () => {
+    const hostname = await getFocusedHostname()
+    if (hostname !== state.hostname) {
+      state.hostname = hostname
+      state.startTime = hostname && state.isTracking ? Date.now() : null
+      await saveTrackerState(state)
+    }
+    return hostname !== null
+  })
+}
+
 async function initializeTracker(): Promise<void> {
   state = await loadTrackerState()
   const hostname = await getFocusedHostname()

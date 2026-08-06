@@ -1,18 +1,27 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { todayKey } from '../src/lib/utils'
+
+type Tab = { active?: boolean, incognito?: boolean, url?: string, windowId?: number }
+type OnUpdated = (tabId: number, changeInfo: { url?: string }, tab: Tab) => void
+type OnMessage = (message: unknown) => Promise<void> | void
 
 const mock = vi.hoisted(() => {
   const state = {
     local: {} as Record<string, unknown>,
     session: {} as Record<string, unknown>,
-    tabs: [] as Array<{ active?: boolean, incognito?: boolean, url?: string, windowId?: number }>,
+    tabs: [] as Tab[],
     windows: new Map<number, { focused: boolean }>()
   }
+  const listeners: { onMessage?: OnMessage, onStartup?: () => void, onUpdated?: OnUpdated } = {}
   const event = () => ({ addListener: vi.fn() })
   const browser = {
     alarms: { create: vi.fn(), onAlarm: event() },
     idle: { onStateChanged: event(), setDetectionInterval: vi.fn() },
-    runtime: { onMessage: event() },
+    runtime: {
+      onInstalled: event(),
+      onMessage: { addListener: vi.fn((listener: OnMessage) => { listeners.onMessage = listener }) },
+      onStartup: { addListener: vi.fn((listener: () => void) => { listeners.onStartup = listener }) }
+    },
     storage: {
       local: {
         get: vi.fn((key: string): Promise<Record<string, unknown>> => Promise.resolve({ [key]: state.local[key] })),
@@ -24,7 +33,12 @@ const mock = vi.hoisted(() => {
         set: vi.fn((values: Record<string, unknown>): Promise<void> => { Object.assign(state.session, values); return Promise.resolve() })
       }
     },
-    tabs: { get: vi.fn(), onActivated: event(), onUpdated: event(), query: vi.fn(() => Promise.resolve(state.tabs)) },
+    tabs: {
+      get: vi.fn(),
+      onActivated: event(),
+      onUpdated: { addListener: vi.fn((listener: OnUpdated) => { listeners.onUpdated = listener }) },
+      query: vi.fn(() => Promise.resolve(state.tabs))
+    },
     windows: {
       WINDOW_ID_NONE: -1,
       get: vi.fn((id: number) => Promise.resolve(state.windows.get(id))),
@@ -32,15 +46,23 @@ const mock = vi.hoisted(() => {
       onFocusChanged: event()
     }
   }
-  return { browser, state }
+  return { browser, listeners, state }
 })
 
 vi.mock('webextension-polyfill', () => ({ default: mock.browser }))
+
+afterEach(() => {
+  vi.clearAllTimers()
+  vi.useRealTimers()
+})
 
 describe('initTracker', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
+    mock.listeners.onMessage = undefined
+    mock.listeners.onStartup = undefined
+    mock.listeners.onUpdated = undefined
     mock.state.local = {}
     mock.state.session = {
       trackerState: { hostname: 'example.com', startTime: 1_000, isTracking: true }
@@ -57,6 +79,8 @@ describe('initTracker', () => {
     expect(mock.browser.windows.onFocusChanged.addListener).toHaveBeenCalledOnce()
     expect(mock.browser.alarms.onAlarm.addListener).toHaveBeenCalledOnce()
     expect(mock.browser.runtime.onMessage.addListener).toHaveBeenCalledOnce()
+    expect(mock.browser.runtime.onStartup.addListener).toHaveBeenCalledOnce()
+    expect(mock.browser.runtime.onInstalled.addListener).toHaveBeenCalledOnce()
   })
 
   it('flushes elapsed time restored after a service-worker restart', async () => {
@@ -81,20 +105,120 @@ describe('initTracker', () => {
     expect(mock.state.session.trackerState).toMatchObject({ hostname: null, startTime: null })
   })
 
-  it('starts tracking after an eligible navigation from an ineligible startup page', async () => {
+  it('records an eligible navigation received while startup is restoring state', async () => {
     mock.state.tabs = [{ active: true, url: 'chrome://newtab', windowId: 1 }]
-    vi.spyOn(Date, 'now').mockReturnValue(6_000)
+    mock.state.session = {}
+    let now = 1_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
     const { initTracker } = await import('../src/lib/tracker')
 
-    await initTracker()
-    const onUpdated = mock.browser.tabs.onUpdated.addListener.mock.calls[0][0]
-    onUpdated(1, { url: 'https://example.com' }, { active: true, url: 'https://example.com', windowId: 1 })
-    await new Promise(resolve => setTimeout(resolve, 0))
+    const initialization = initTracker()
+    mock.listeners.onUpdated?.(1, { url: 'https://example.com' }, { active: true, url: 'https://example.com', windowId: 1 })
+    await initialization
+    await vi.waitFor(() => expect(mock.browser.storage.session.set).toHaveBeenCalledTimes(2))
 
-    expect(mock.state.session.trackerState).toMatchObject({
-      hostname: 'example.com',
-      startTime: 6_000,
-      isTracking: true
+    now = 6_000
+    await mock.listeners.onMessage?.({ type: 'flush' })
+
+    expect(mock.state.local).toMatchObject({
+      browsingData: { [todayKey()]: { 'example.com': 5 } }
+    })
+    vi.restoreAllMocks()
+  })
+
+  it('records an interval started at Chrome profile startup', async () => {
+    mock.state.session = {}
+    let now = 1_000
+    vi.useFakeTimers()
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    await import('../src/background/index')
+
+    const onStartup = mock.listeners.onStartup
+    if (!onStartup) throw new Error('startup listener was not registered')
+    onStartup()
+    await vi.waitFor(() => expect(mock.browser.storage.session.set).toHaveBeenCalledOnce())
+
+    now = 6_000
+    await mock.listeners.onMessage?.({ type: 'flush' })
+
+    expect(mock.state.local).toMatchObject({
+      browsingData: { [todayKey()]: { 'example.com': 5 } }
+    })
+    vi.restoreAllMocks()
+  })
+
+  it('reconciles a tab restored after Chrome profile startup', async () => {
+    mock.state.session = {}
+    mock.state.tabs = []
+    mock.state.windows = new Map([[1, { focused: false }]])
+    let now = 1_000
+    vi.useFakeTimers()
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    await import('../src/background/index')
+
+    const onStartup = mock.listeners.onStartup
+    if (!onStartup) throw new Error('startup listener was not registered')
+    onStartup()
+    await vi.waitFor(() => expect(mock.browser.storage.session.set).toHaveBeenCalledOnce())
+
+    now = 2_000
+    await vi.advanceTimersByTimeAsync(1_000)
+    mock.state.tabs = [{ active: true, url: 'https://example.com', windowId: 1 }]
+    mock.state.windows = new Map([[1, { focused: true }]])
+    now = 3_000
+    await vi.advanceTimersByTimeAsync(1_000)
+    await vi.waitFor(() => expect(mock.browser.storage.session.set).toHaveBeenCalledTimes(2))
+
+    now = 8_000
+    await mock.listeners.onMessage?.({ type: 'flush' })
+
+    expect(mock.state.local).toMatchObject({
+      browsingData: { [todayKey()]: { 'example.com': 5 } }
+    })
+    vi.restoreAllMocks()
+  })
+
+  it('stops startup reconciliation after thirty retries', async () => {
+    mock.state.session = {}
+    mock.state.tabs = [{ active: true, url: 'chrome://newtab', windowId: 1 }]
+    let now = 1_000
+    vi.useFakeTimers()
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    await import('../src/background/index')
+
+    const onStartup = mock.listeners.onStartup
+    if (!onStartup) throw new Error('startup listener was not registered')
+    onStartup()
+    await vi.waitFor(() => expect(mock.browser.storage.session.set).toHaveBeenCalledOnce())
+
+    now = 31_000
+    await vi.runAllTimersAsync()
+
+    expect(mock.browser.tabs.query).toHaveBeenCalledTimes(31)
+    vi.restoreAllMocks()
+  })
+
+  it('does not credit an unobserved hostname change during startup reconciliation', async () => {
+    let now = 1_000
+    vi.useFakeTimers()
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    await import('../src/background/index')
+
+    const onStartup = mock.listeners.onStartup
+    if (!onStartup) throw new Error('startup listener was not registered')
+    onStartup()
+    await vi.waitFor(() => expect(mock.browser.storage.session.set).toHaveBeenCalledOnce())
+
+    mock.state.tabs = [{ active: true, url: 'https://other.example', windowId: 1 }]
+    now = 2_000
+    await vi.advanceTimersByTimeAsync(1_000)
+    await vi.waitFor(() => expect(mock.browser.storage.session.set).toHaveBeenCalledTimes(2))
+
+    now = 7_000
+    await mock.listeners.onMessage?.({ type: 'flush' })
+
+    expect(mock.state.local).toEqual({
+      browsingData: { [todayKey()]: { 'other.example': 5 } }
     })
     vi.restoreAllMocks()
   })
