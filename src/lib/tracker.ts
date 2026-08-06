@@ -68,10 +68,10 @@ async function getFocusedHostname(windowId?: number): Promise<string | null> {
   }
 }
 
-async function isFocusedTab(tab: browser.Tabs.Tab): Promise<boolean> {
-  if (!tab.active || tab.incognito || tab.windowId === undefined) return false
+async function trackFocusedTab(tab: browser.Tabs.Tab): Promise<void> {
+  if (!tab.active || tab.windowId === undefined) return
   const window = await browser.windows.get(tab.windowId)
-  return window.focused
+  if (window.focused) await setActiveHostname(tab.incognito ? null : extractHostname(tab.url))
 }
 
 export async function initTracker(): Promise<void> {
@@ -108,7 +108,7 @@ browser.tabs.onActivated.addListener(({ tabId }) => {
   void queue(async () => {
     try {
       const tab = await browser.tabs.get(tabId)
-      if (await isFocusedTab(tab)) await setActiveHostname(extractHostname(tab.url))
+      await trackFocusedTab(tab)
     } catch { /* tab or window closed before we could read it */ }
   })
 })
@@ -117,7 +117,7 @@ browser.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
   if (!changeInfo.url) return
   void queue(async () => {
     try {
-      if (await isFocusedTab(tab)) await setActiveHostname(extractHostname(changeInfo.url))
+      await trackFocusedTab(tab)
     } catch { /* tab or window closed before we could read it */ }
   })
 })

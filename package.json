@@ -15,10 +15,15 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "pretest:e2e:chrome": "npm run build",
+    "test:e2e:chrome": "playwright test --config test/e2e/playwright.config.ts",
+    "test:browser:sites": "node test/browser/site-server.mjs",
+    "install:test-browser": "playwright install chromium"
   },
   "devDependencies": {
     "@eslint/js": "~10.0.1",
+    "@playwright/test": "^1.62.1",
     "@sveltejs/vite-plugin-svelte": "~7.2.0",
     "@types/webextension-polyfill": "~0.12.5",
     "eslint": "~10.8.0",

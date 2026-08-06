@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { todayKey } from '../src/lib/utils'
 
 type Tab = { active?: boolean, incognito?: boolean, url?: string, windowId?: number }
+type OnActivated = (activeInfo: { tabId: number }) => void
 type OnUpdated = (tabId: number, changeInfo: { url?: string }, tab: Tab) => void
 type OnMessage = (message: unknown) => Promise<void> | void
 
@@ -12,7 +13,7 @@ const mock = vi.hoisted(() => {
     tabs: [] as Tab[],
     windows: new Map<number, { focused: boolean }>()
   }
-  const listeners: { onMessage?: OnMessage, onStartup?: () => void, onUpdated?: OnUpdated } = {}
+  const listeners: { onActivated?: OnActivated, onMessage?: OnMessage, onStartup?: () => void, onUpdated?: OnUpdated } = {}
   const event = () => ({ addListener: vi.fn() })
   const browser = {
     alarms: { create: vi.fn(), onAlarm: event() },
@@ -35,7 +36,7 @@ const mock = vi.hoisted(() => {
     },
     tabs: {
       get: vi.fn(),
-      onActivated: event(),
+      onActivated: { addListener: vi.fn((listener: OnActivated) => { listeners.onActivated = listener }) },
       onUpdated: { addListener: vi.fn((listener: OnUpdated) => { listeners.onUpdated = listener }) },
       query: vi.fn(() => Promise.resolve(state.tabs))
     },
@@ -62,6 +63,7 @@ describe('initTracker', () => {
     vi.clearAllMocks()
     mock.listeners.onMessage = undefined
     mock.listeners.onStartup = undefined
+    mock.listeners.onActivated = undefined
     mock.listeners.onUpdated = undefined
     mock.state.local = {}
     mock.state.session = {
@@ -122,6 +124,27 @@ describe('initTracker', () => {
 
     expect(mock.state.local).toMatchObject({
       browsingData: { [todayKey()]: { 'example.com': 5 } }
+    })
+    vi.restoreAllMocks()
+  })
+
+  it('stops tracking when the active tab is incognito', async () => {
+    let now = 1_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    mock.browser.tabs.get.mockResolvedValue({ active: true, incognito: true, url: 'https://private.example', windowId: 1 })
+    const { initTracker } = await import('../src/lib/tracker')
+
+    await initTracker()
+    now = 2_000
+    mock.listeners.onActivated?.({ tabId: 2 })
+    await vi.waitFor(() => expect(mock.state.local).toMatchObject({
+      browsingData: { [todayKey()]: { 'example.com': 1 } }
+    }))
+    now = 7_000
+    await mock.listeners.onMessage?.({ type: 'flush' })
+
+    expect(mock.state.local).toEqual({
+      browsingData: { [todayKey()]: { 'example.com': 1 } }
     })
     vi.restoreAllMocks()
   })
