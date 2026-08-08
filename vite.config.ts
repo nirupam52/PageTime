@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { configDefaults, defineConfig } from 'vitest/config'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import webExtension from 'vite-plugin-web-extension'
 
@@ -47,6 +47,9 @@ export default defineConfig(({ mode }) => {
       outDir: `dist/${browser}`,
       emptyOutDir: true,
       sourcemap: false
+    },
+    test: {
+      exclude: [...configDefaults.exclude, 'test/e2e/**']
     }
   }
 })

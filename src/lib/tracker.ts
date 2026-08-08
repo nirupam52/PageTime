@@ -68,15 +68,27 @@ async function getFocusedHostname(windowId?: number): Promise<string | null> {
   }
 }
 
-async function isFocusedTab(tab: browser.Tabs.Tab): Promise<boolean> {
-  if (!tab.active || tab.incognito || tab.windowId === undefined) return false
+async function trackFocusedTab(tab: browser.Tabs.Tab): Promise<void> {
+  if (!tab.active || tab.windowId === undefined) return
   const window = await browser.windows.get(tab.windowId)
-  return window.focused
+  if (window.focused) await setActiveHostname(tab.incognito ? null : extractHostname(tab.url))
 }
 
 export async function initTracker(): Promise<void> {
   initialization ??= initializeTracker()
   return initialization
+}
+
+export function reconcileFocusedTab(): Promise<boolean> {
+  return queue(async () => {
+    const hostname = await getFocusedHostname()
+    if (hostname !== state.hostname) {
+      state.hostname = hostname
+      state.startTime = hostname && state.isTracking ? Date.now() : null
+      await saveTrackerState(state)
+    }
+    return hostname !== null
+  })
 }
 
 async function initializeTracker(): Promise<void> {
@@ -85,7 +97,7 @@ async function initializeTracker(): Promise<void> {
   if (state.isTracking && hostname === state.hostname && state.startTime !== null) {
     await flush()
   } else {
-    state.isTracking = hostname !== null
+    state.isTracking = true
     state.hostname = hostname
     state.startTime = hostname ? Date.now() : null
     await saveTrackerState(state)
@@ -96,7 +108,7 @@ browser.tabs.onActivated.addListener(({ tabId }) => {
   void queue(async () => {
     try {
       const tab = await browser.tabs.get(tabId)
-      if (await isFocusedTab(tab)) await setActiveHostname(extractHostname(tab.url))
+      await trackFocusedTab(tab)
     } catch { /* tab or window closed before we could read it */ }
   })
 })
@@ -105,7 +117,7 @@ browser.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
   if (!changeInfo.url) return
   void queue(async () => {
     try {
-      if (await isFocusedTab(tab)) await setActiveHostname(extractHostname(changeInfo.url))
+      await trackFocusedTab(tab)
     } catch { /* tab or window closed before we could read it */ }
   })
 })

@@ -101,7 +101,7 @@ The Site is the URL hostname with one leading `www.` removed. Paths, query strin
 | --- | --- | --- | --- |
 | Tracking | Eligible hostname | Timestamp | Time accrues for that hostname. |
 | No eligible Site | `null` | `null` | The focused tab is internal, an extension page, incognito, or otherwise not HTTP(S); nothing accrues. |
-| Paused/not initialized | `null` | `null` | Nothing accrues. Browser-focus loss causes this state; startup on a noneligible page currently does too. |
+| Paused/not initialized | `null` | `null` | Nothing accrues. Browser-focus loss causes this state. |
 
 The session-only tracker state is saved after every transition. The durable browsing data is a separate local-storage map of date, Site, and whole seconds.
 
@@ -127,7 +127,6 @@ Chrome registers these listeners before asynchronous state loading, so a Manifes
 - Seconds are stored as whole numbers. Each flush drops its sub-second remainder.
 - `addSeconds` assigns an entire flushed interval to the calendar date at flush time. An interval spanning local midnight is therefore not split between dates.
 - Browser restart clears session tracker state, so closed-browser time never counts. A service-worker restart retains it only when the saved hostname still matches the active focused tab.
-- Current defect: if startup finds no eligible Site, it stores a paused state. A later navigation from that page to an eligible Site records the hostname but does not start its clock until a browser-window focus change. That first visit is undercounted.
 
 ## Testing Decisions
 
